@@ -1,0 +1,66 @@
+{
+    "$schema": "https://cdn.statically.io/gh/nguyenngoclongdev/cdn/main/schema/v11/terminal-keeper.json",
+    "theme": "tribe",
+    "active": "default",
+    "activateOnStartup": true,
+    "keepExistingTerminals": false,
+    "noClear": false,
+    "sessions": {
+        "default": [
+            {
+                "name": "worker",
+                "icon": "gear",
+                "color": "terminal.ansiGreen",
+                "message": "⚙️  Temporal Worker",
+                "cwd": "${workspaceFolder}",
+                "focus": true,
+                "autoExecuteCommands": false,
+                "joinOperator": "&&",
+                "commands": [
+                    "source .venv/bin/activate",
+                    "python backend/worker.py"
+                ]
+            },
+            {
+                "name": "code_interpreter",
+                "icon": "code",
+                "color": "terminal.ansiYellow",
+                "message": "🐍 Code Interpreter Logs",
+                "cwd": "${workspaceFolder}",
+                "focus": false,
+                "autoExecuteCommands": false,
+                "commands": [
+                    "aws logs tail /aws/vendedlogs/bedrock-agentcore/code-interpreter/APPLICATION_LOGS/aws.codeinterpreter.v1 --follow --format short | while read -r line; do echo -e \"$line\"; done"
+                ]
+            },
+            {
+                "name": "backend",
+                "icon": "server",
+                "color": "terminal.ansiCyan",
+                "message": "🚀 FastAPI Backend",
+                "cwd": "${workspaceFolder}",
+                "focus": false,
+                "autoExecuteCommands": false,
+                "joinOperator": "&&",
+                "commands": [
+                    "source .venv/bin/activate",
+                    "uvicorn backend.main:app --reload --port 8000"
+                ]
+            },
+            {
+                "name": "ui",
+                "icon": "browser",
+                "color": "terminal.ansiMagenta",
+                "message": "🎨 Streamlit UI",
+                "cwd": "${workspaceFolder}",
+                "focus": false,
+                "autoExecuteCommands": false,
+                "joinOperator": "&&",
+                "commands": [
+                    "source .venv/bin/activate",
+                    "streamlit run ui/streamlit_app.py"
+                ]
+            }
+        ]
+    }
+}
