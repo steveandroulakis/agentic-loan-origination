@@ -1,9 +1,10 @@
 import asyncio
+from datetime import timedelta
+from typing import Any, Dict, Optional
+
 from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
-from datetime import timedelta
-from typing import Dict, Any, Optional
 
 
 @workflow.defn
@@ -108,14 +109,11 @@ class SupervisorWorkflow:
             initial_interval=timedelta(seconds=1),
             maximum_interval=timedelta(seconds=10),
             backoff_coefficient=2.0,
-            maximum_attempts=10
+            maximum_attempts=10,
         )
 
     async def _process_single_document(
-        self,
-        applicant_id: str,
-        doc_type: str,
-        local_path: str
+        self, applicant_id: str, doc_type: str, local_path: str
     ) -> Dict[str, Any]:
         """
         Process a single document with AWS Bedrock Nova Pro.
@@ -134,7 +132,9 @@ class SupervisorWorkflow:
         Returns:
             Processing result with status and extracted data
         """
-        workflow.logger.info(f"Starting OCR processing for {doc_type} with AWS Bedrock Nova Pro")
+        workflow.logger.info(
+            f"Starting OCR processing for {doc_type} with AWS Bedrock Nova Pro"
+        )
 
         try:
             # Process document with AWS Bedrock Nova Pro
@@ -144,23 +144,23 @@ class SupervisorWorkflow:
                 {
                     "applicant_id": applicant_id,
                     "doc_type": doc_type,
-                    "local_path": local_path
+                    "local_path": local_path,
                 },
-                start_to_close_timeout=timedelta(minutes=15),  # Vision models may take longer
-                retry_policy=self._default_retry_policy
+                start_to_close_timeout=timedelta(
+                    minutes=15
+                ),  # Vision models may take longer
+                retry_policy=self._default_retry_policy,
             )
 
-            workflow.logger.info(f"OCR processing completed for {doc_type}: {result['status']}")
+            workflow.logger.info(
+                f"OCR processing completed for {doc_type}: {result['status']}"
+            )
             return result
 
         except ActivityError as e:
             # Activity failed after all retry attempts
             workflow.logger.error(f"Activity error processing {doc_type}: {e}")
-            return {
-                "doc_type": doc_type,
-                "status": "error",
-                "error": str(e)
-            }
+            return {"doc_type": doc_type, "status": "error", "error": str(e)}
 
     @workflow.run
     async def run(self, application: Dict[str, Any]):
@@ -177,7 +177,9 @@ class SupervisorWorkflow:
         # ═══════════════════════════════════════════════════════════
         # Wait for documents to be uploaded before proceeding
         workflow.logger.info("Waiting for documents to be uploaded...")
-        await workflow.wait_condition(lambda: self._documents_uploaded, timeout=timedelta(minutes=10))
+        await workflow.wait_condition(
+            lambda: self._documents_uploaded, timeout=timedelta(minutes=10)
+        )
         workflow.logger.info(f"Documents uploaded: {self._document_paths}")
 
         # Add document paths to application data for activities
@@ -196,7 +198,7 @@ class SupervisorWorkflow:
             "fetch_bank_account",
             application["applicant_id"],
             start_to_close_timeout=timedelta(seconds=60),
-            retry_policy=self._default_retry_policy
+            retry_policy=self._default_retry_policy,
         )
 
         # Activity 2: Process documents with AWS Bedrock Nova Pro
@@ -211,14 +213,14 @@ class SupervisorWorkflow:
         document_paths = application.get("document_paths", {})
 
         if document_paths:
-            workflow.logger.info(f"Processing {len(document_paths)} documents in parallel with AWS Bedrock Nova Pro")
+            workflow.logger.info(
+                f"Processing {len(document_paths)} documents in parallel with AWS Bedrock Nova Pro"
+            )
 
             # FAN-OUT: Create parallel tasks for each document
             document_tasks = [
                 self._process_single_document(
-                    application["applicant_id"],
-                    doc_type,
-                    local_path
+                    application["applicant_id"], doc_type, local_path
                 )
                 for doc_type, local_path in document_paths.items()
             ]
@@ -230,14 +232,20 @@ class SupervisorWorkflow:
             docs = {
                 "documents": processed_documents,
                 "total_processed": len(processed_documents),
-                "successful": len([d for d in processed_documents if d.get("status") == "success"]),
-                "failed": len([d for d in processed_documents if d.get("status") != "success"])
+                "successful": len(
+                    [d for d in processed_documents if d.get("status") == "success"]
+                ),
+                "failed": len(
+                    [d for d in processed_documents if d.get("status") != "success"]
+                ),
             }
         else:
-            workflow.logger.warning("No document paths provided, skipping OCR processing")
+            workflow.logger.warning(
+                "No document paths provided, skipping OCR processing"
+            )
             docs = {"documents": [], "status": "no_documents_uploaded"}
 
-        await workflow.sleep(20)  # Simulate processing delay | CRASH YOUR WORKER HERE    
+        await workflow.sleep(20)  # Simulate processing delay | CRASH YOUR WORKER HERE
 
         # Activity 3: Fetch credit report with provider fallback
         # ════════════════════════════════════════════════════════
@@ -253,15 +261,15 @@ class SupervisorWorkflow:
                 start_to_close_timeout=timedelta(seconds=60),
                 retry_policy=RetryPolicy(
                     maximum_attempts=2  # Fail fast to try fallback
-                )
+                ),
             )
-        except ActivityError as e:
+        except ActivityError:
             # TEMPORAL ORCHESTRATION: Fallback to secondary provider
             credit = await workflow.execute_activity(
                 "fetch_credit_report_experian",
                 application["applicant_id"],
-                start_to_close_timeout=timedelta(seconds=60),
-                retry_policy=self._default_retry_policy
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=RetryPolicy(maximum_interval=timedelta(seconds=10)),
             )
 
         # ═══════════════════════════════════════════════════════════
@@ -271,27 +279,36 @@ class SupervisorWorkflow:
         # AgentCore Code Interpreter performs sophisticated financial analysis
         # TEMPORAL ORCHESTRATION: Launch activities in parallel using asyncio.gather()
         # These are independent assessments that can run concurrently
-        
+
         # Execute all three assessments in parallel
         credit_res, income_res, expense_res = await asyncio.gather(
             workflow.execute_activity(
                 "credit_assessment",
                 {"application": application, "credit": credit},
-                start_to_close_timeout=timedelta(minutes=5),  # Credit is quick
-                retry_policy=self._default_retry_policy
+                start_to_close_timeout=timedelta(minutes=10),  # Credit is quick
+                retry_policy=self._default_retry_policy,
             ),
             workflow.execute_activity(
                 "income_assessment",
-                {"application": application, "bank": bank, "credit": credit, "documents": docs},
-                start_to_close_timeout=timedelta(minutes=30),  # Increased from 15 min for AgentCore
-                retry_policy=self._default_retry_policy
+                {
+                    "application": application,
+                    "bank": bank,
+                    "credit": credit,
+                    "documents": docs,
+                },
+                start_to_close_timeout=timedelta(
+                    minutes=30
+                ),  # Increased from 15 min for AgentCore
+                retry_policy=self._default_retry_policy,
             ),
             workflow.execute_activity(
                 "expense_assessment",
                 {"application": application, "bank": bank, "documents": docs},
-                start_to_close_timeout=timedelta(minutes=30),  # Increased from 15 min for AgentCore
-                retry_policy=self._default_retry_policy
-            )
+                start_to_close_timeout=timedelta(
+                    minutes=30
+                ),  # Increased from 15 min for AgentCore
+                retry_policy=self._default_retry_policy,
+            ),
         )
 
         # ═══════════════════════════════════════════════════════════
@@ -307,12 +324,10 @@ class SupervisorWorkflow:
                 "income": income_res,
                 "expense": expense_res,
                 "credit": credit_res,
-                "docs": docs
+                "docs": docs,
             },
             start_to_close_timeout=timedelta(seconds=1200),
-            retry_policy=RetryPolicy(
-                maximum_interval=timedelta(seconds=10)
-            )
+            retry_policy=RetryPolicy(maximum_interval=timedelta(seconds=10)),
         )
 
         # ═══════════════════════════════════════════════════════════
@@ -330,7 +345,7 @@ class SupervisorWorkflow:
             "assessments": {
                 "income": income_res,
                 "expense": expense_res,
-                "credit": credit_res
+                "credit": credit_res,
             },
             "suggested_decision": decision,
         }
@@ -344,10 +359,7 @@ class SupervisorWorkflow:
         decision = self._human_decision
 
         # Create final result with all context
-        final = {
-            "summary": summary,
-            "human_decision": decision
-        }
+        final = {"summary": summary, "human_decision": decision}
         self._final_result = final
 
         return final
@@ -368,7 +380,9 @@ class SupervisorWorkflow:
         """
         self._document_paths = data.get("document_paths")
         self._documents_uploaded = True
-        workflow.logger.info(f"Received document paths via signal: {self._document_paths}")
+        workflow.logger.info(
+            f"Received document paths via signal: {self._document_paths}"
+        )
 
     @workflow.signal
     def human_review(self, decision: Dict[str, Any]):
@@ -410,7 +424,7 @@ class SupervisorWorkflow:
             "docs": self._summary.get("docs"),
             "credit": self._summary.get("credit"),
             "assessments": self._summary.get("assessments"),
-            "suggested_decision": self._summary.get("suggested_decision")
+            "suggested_decision": self._summary.get("suggested_decision"),
         }
 
     @workflow.query
@@ -425,5 +439,5 @@ class SupervisorWorkflow:
             return None
         return {
             "summary": self._final_result.get("summary"),
-            "human_decision": self._final_result.get("human_decision")
+            "human_decision": self._final_result.get("human_decision"),
         }
