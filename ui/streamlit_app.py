@@ -82,7 +82,7 @@ with tab[0]:
 
 with tab[1]:
     st.header("Human review")
-    review_workflow_id = st.text_input("Workflow ID to review", "")
+    review_workflow_id = st.text_input("Workflow ID to review", "loan-")
 
     summary_data = None
     if st.button("Fetch Loan Details") and review_workflow_id:
@@ -109,24 +109,40 @@ with tab[1]:
         if assessments:
             st.markdown("### 🤖 AI Analysis Summary")
 
-            # Create columns for better layout
-            assessment_cols = st.columns(len(assessments))
+            # Extract credit assessment separately (it's compact)
+            credit_data = assessments.get("credit", {})
+            other_assessments = {k: v for k, v in assessments.items() if k != "credit"}
 
-            for idx, (assessment_type, assessment_data) in enumerate(assessments.items()):
-                if assessment_data:
-                    with assessment_cols[idx]:
-                        st.markdown(f"### {assessment_type.replace('_', ' ').title()}")
+            # Display credit as a compact header row
+            if credit_data:
+                credit_cols = st.columns([1, 1, 4])
+                with credit_cols[0]:
+                    credit_ok = credit_data.get("credit_ok", "N/A")
+                    st.metric("Credit Status", "✅ OK" if credit_ok else "❌ Not OK")
+                with credit_cols[1]:
+                    score = credit_data.get("score", "N/A")
+                    st.metric("Credit Score", score)
+                st.markdown("---")
 
-                        if isinstance(assessment_data, dict):
-                            # Create a clean card-like display
-                            for key, value in assessment_data.items():
-                                if key.lower() in ['score', 'rating', 'risk']:
-                                    # Highlight important metrics
-                                    st.metric(label=key.replace('_', ' ').title(), value=str(value))
-                                else:
-                                    st.markdown(f"**{key.replace('_', ' ').title()}:** {value}")
-                        else:
-                            st.markdown(assessment_data)
+            # Display remaining assessments (expense, income) in 2 columns
+            if other_assessments:
+                assessment_cols = st.columns(len(other_assessments))
+
+                for idx, (assessment_type, assessment_data) in enumerate(other_assessments.items()):
+                    if assessment_data:
+                        with assessment_cols[idx]:
+                            st.markdown(f"### {assessment_type.replace('_', ' ').title()}")
+
+                            if isinstance(assessment_data, dict):
+                                # Create a clean card-like display
+                                for key, value in assessment_data.items():
+                                    if key.lower() in ['score', 'rating', 'risk']:
+                                        # Highlight important metrics
+                                        st.metric(label=key.replace('_', ' ').title(), value=str(value))
+                                    else:
+                                        st.markdown(f"**{key.replace('_', ' ').title()}:** {value}")
+                            else:
+                                st.markdown(assessment_data)
 
             st.markdown("---")
 
@@ -164,7 +180,7 @@ with tab[1]:
                 if net_income > 0:
                     st.metric("Net Monthly Income", f"${net_income:,.2f}", delta="Positive")
                 else:
-                    st.metric("Net Monthly Income", f"${net_income:,.2f}", delta="Negative")
+                    st.metric("Net Monthly Income", f"${net_income:,.2f}", delta="Negative", delta_color="inverse")
 
         st.markdown("---")
 
