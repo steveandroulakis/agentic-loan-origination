@@ -210,7 +210,7 @@ AWS_REGION=<your-region>  # e.g., ap-southeast-2
 AWS_BEDROCK_MODEL=<model-id>  # e.g., au.anthropic.claude-sonnet-4-5-20250929-v1:0
 
 # AWS Bedrock Nova Pro for Document OCR:
-AWS_BEDROCK_NOVA_MODEL_ID=arn:aws:bedrock:us-west-2:1111111111:inference-profile/us.amazon.nova-pro-v1:0
+AWS_BEDROCK_NOVA_MODEL_ID=amazon.nova-pro-v1:0
 # Or use a specific region model ARN
 # AWS_BEDROCK_NOVA_MODEL_ID=us.amazon.nova-pro-v1:0
 ```
