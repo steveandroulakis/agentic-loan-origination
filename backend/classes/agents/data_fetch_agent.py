@@ -1,8 +1,27 @@
-from temporalio import activity
-from typing import Dict, Any
 import json
+import re
+from typing import Any, Dict
+
 from strands import Agent
 from strands_tools import http_request
+from temporalio import activity
+
+
+def strip_markdown_code_block(text: str) -> str:
+    """
+    Strip markdown code block wrappers from text if present.
+
+    LLMs sometimes wrap JSON responses in ```json ... ``` blocks.
+    This function extracts the content from within those blocks.
+    """
+    text = text.strip()
+
+    # Match ```json or ``` at the start, and ``` at the end
+    match = re.match(r"^```(?:json)?\s*\n?(.*?)\n?```$", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    return text
 
 
 class DataFetchAgent:
@@ -65,8 +84,11 @@ When making requests:
             if not response_text:
                 raise ValueError(f"No text content in agent response for {data_type} API")
 
+            # Strip markdown code blocks if present (LLMs sometimes wrap JSON in ```json ... ```)
+            cleaned_text = strip_markdown_code_block(response_text)
+
             # Parse the JSON response
-            parsed_data = json.loads(response_text)
+            parsed_data = json.loads(cleaned_text)
             activity.logger.info(f"Successfully fetched {data_type} data: {parsed_data}")
             return parsed_data
 

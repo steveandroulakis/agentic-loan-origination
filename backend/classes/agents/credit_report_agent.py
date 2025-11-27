@@ -1,5 +1,5 @@
-from temporalio import activity
-from typing import Dict, Any
+from typing import Any, Dict
+
 from classes.agents.data_fetch_agent import DataFetchAgent
 
 
